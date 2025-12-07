@@ -1,59 +1,85 @@
+#!/usr/bin/env python3
+"""
+Build script for generating the academic website.
+Merges data from data.json with template.html to produce index.html.
+"""
+
 import json
-import markdown
 from jinja2 import Template
+import markdown
 
-def build():
+def load_data(filepath='data.json'):
+    """Load and return data from JSON file."""
     try:
-        # 1. Load Data
-        with open('data.json', 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return json.load(f)
     except FileNotFoundError:
-        print("❌ Error: data.json not found.")
-        return
+        print(f"Error: {filepath} not found. Please create a data.json file.")
+        return None
 
-    # 2. Helper function to render markdown safely
-    def md_filter(text):
-        if not text: return ""
-        return markdown.markdown(text)
+def render_markdown(text):
+    """Convert markdown text to HTML."""
+    if text is None:
+        return ""
+    return markdown.markdown(text, extensions=['extra'])
 
-    # 3. Process fields only if they exist
+def process_markdown_fields(data):
+    """Process markdown in specific fields of the data."""
+    # Process bio
     if 'basics' in data and 'bio' in data['basics']:
-        data['basics']['bio'] = md_filter(data['basics']['bio'])
-    
-    # Safely iterate over lists only if they exist
-    if 'news' in data and isinstance(data['news'], list):
+        data['basics']['bio'] = render_markdown(data['basics']['bio'])
+
+    if 'basics' in data and 'short_bio' in data['basics']:
+        data['basics']['short_bio'] = render_markdown(data['basics']['short_bio'])
+
+    # Process news items
+    if 'news' in data:
         for item in data['news']:
             if 'text' in item:
-                item['text'] = md_filter(item['text'])
+                item['text'] = render_markdown(item['text'])
 
-    if 'projects' in data and isinstance(data['projects'], list):
-        for proj in data['projects']:
-            if 'summary' in proj:
-                proj['summary'] = md_filter(proj['summary'])
+    # Process project summaries
+    if 'projects' in data:
+        for project in data['projects']:
+            if 'summary' in project:
+                project['summary'] = render_markdown(project['summary'])
 
-    if 'publications' in data and isinstance(data['publications'], list):
+    # Process publication authors
+    if 'publications' in data:
         for pub in data['publications']:
             if 'authors' in pub:
-                pub['authors'] = md_filter(pub['authors'])
+                pub['authors'] = render_markdown(pub['authors'])
 
-    # 4. Load Template
+    return data
+
+def build_site():
+    """Build the website by merging data with template."""
+    # Load data
+    data = load_data()
+    if data is None:
+        return False
+
+    # Process markdown fields
+    data = process_markdown_fields(data)
+
+    # Load template
     try:
         with open('template.html', 'r', encoding='utf-8') as f:
             template_content = f.read()
     except FileNotFoundError:
-        print("❌ Error: template.html not found.")
-        return
+        print("Error: template.html not found.")
+        return False
 
-    # 5. Render
+    # Create Jinja2 template and render
     template = Template(template_content)
-    # Jinja2 treats missing variables as "undefined" (False in if-statements) by default
-    output_html = template.render(**data)
+    html_output = template.render(**data)
 
-    # 6. Save
+    # Write output
     with open('index.html', 'w', encoding='utf-8') as f:
-        f.write(output_html)
-    
-    print("✅ Academic Website generated successfully!")
+        f.write(html_output)
 
-if __name__ == "__main__":
-    build()
+    print("Successfully generated index.html")
+    return True
+
+if __name__ == '__main__':
+    build_site()
